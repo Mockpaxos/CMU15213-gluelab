@@ -1,0 +1,111 @@
+#! /bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (c) 2013 HuaWei. All Rights Reserved.
+#
+# FS QA Test No. 310
+#
+# Check if there are two threads,one keeps calling read() or lseek(), and
+# the other calling readdir(), both on the same directory fd.
+#
+# Testing on ext3: with dir_index disabled results in the following
+# dmesg output: (also occurs when testing ext2 and ext4)
+#
+# EXT3-fs error (device sdb): ext3_readdir: bad entry in directory #1134241:
+# rec_len % 4 != 0 - offset=2704, inode=16973836, rec_len=12850, name_len=52
+# EXT3-fs error (device sdb): ext3_readdir: bad entry in directory #1134241:
+# directory entry across blocks - offset=1672, inode=16973836, rec_len=14132,
+# name_len=57
+#
+# The filesystem mount option 'errors=' will define the behavior
+# when an error is encountered. (see mount manpage)
+#
+# The test is based on a testcase from Li Zefan <lizefan@huawei.com>.
+#
+# http://marc.info/?l=linux-kernel&m=136123703211869&w=2
+#
+. ./common/preamble
+_begin_fstest auto
+
+# Override the default cleanup function.
+_cleanup()
+{
+	rm -rf $TEST_DIR/tmp
+}
+
+# Import common functions.
+. ./common/filter
+
+# real QA test starts here
+_supported_fs generic
+_require_test
+_require_command "$KILLALL_PROG" killall
+
+dmesg -c > /dev/null
+
+nr_bug=`dmesg | grep -c "kernel BUG"`
+nr_error=`dmesg | grep -wc "error"`
+nr_null=`dmesg | grep -c "kernel NULL pointer dereference"`
+nr_warning=`dmesg | grep -c "^WARNING"`
+nr_lockdep=`dmesg | grep -c "possible recursive locking detected"`
+
+#check if some kind of kernel bug happened
+check_kernel_bug()
+{
+	new_bug=`dmesg | grep -c "kernel BUG"`
+	new_error=`dmesg | grep -wc "error"`
+	new_null=`dmesg | grep -c "kernel NULL pointer dereference"`
+	new_warning=`dmesg | grep -c "^WARNING"`
+	new_lockdep=`dmesg | grep -c "possible recursive locking detected"`
+
+	# no kernel bug is detected
+	if [ $new_bug -eq $nr_bug -a $new_error -eq $nr_error -a \
+	     $new_null -eq $nr_null -a $new_warning -eq $nr_warning -a \
+	     $new_lockdep -eq $nr_lockdep ]; then
+		return 0
+	fi
+
+	nr_bug=$new_bug
+	nr_error=$new_error
+	nr_null=$new_null
+	nr_warning=$new_warning
+	nr_lockdep=$new_lockdep
+	return 1
+}
+
+RUN_TIME=$((30 * $TIME_FACTOR))
+
+SEQ_DIR=$TEST_DIR/$seq
+mkdir -p $SEQ_DIR
+for n in {1..4096}; do
+	touch $SEQ_DIR/$n
+done
+
+_test_read()
+{
+	$here/src/t_readdir_1 $SEQ_DIR &
+	sleep $RUN_TIME
+	$KILLALL_PROG t_readdir_1
+	check_kernel_bug
+	if [ $? -ne 0 ]; then
+		_fatal "kernel bug detected, check dmesg for more infomation."
+	fi
+}
+
+_test_lseek()
+{
+	$here/src/t_readdir_2 $SEQ_DIR &
+	sleep $RUN_TIME
+	$KILLALL_PROG t_readdir_2
+	check_kernel_bug
+	if [ $? -ne 0 ]; then
+		_fatal "kernel bug detected, check dmesg for more infomation."
+	fi
+}
+
+_test_read
+_test_lseek
+
+# success, all done
+echo "*** done"
+status=0
+exit

@@ -1,0 +1,17 @@
+# Build outputs (C)
+/sfs-tester
+/sfs-tester-ct
+/sfs-fsck
+
+# object files
+*.o
+
+# filesystem images should not be checked in
+*.sfs
+
+# contech files
+*.trace
+*.taskgraph
+*.ll
+*.bin
+*link.bc

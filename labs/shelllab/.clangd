@@ -1,0 +1,21 @@
+# Match the Linux build flags in Makefile. Run clangd inside WSL/Linux,
+# not with native Windows headers (this lab uses POSIX and GNU APIs).
+CompileFlags:
+  Add:
+    # Also parse standalone .h files as C, not Objective-C++.
+    - -xc
+    - -std=c11
+    - -O2
+    - -g
+    - -D_GNU_SOURCE=1
+    - -D_FORTIFY_SOURCE=2
+    - -I.
+    - -Wall
+    - -Wextra
+    - -Wpedantic
+    - -Wconversion
+    - -Wstrict-prototypes
+    - -Wmissing-prototypes
+    - -Wwrite-strings
+    - -Wno-unused-function
+    - -Wno-unused-parameter

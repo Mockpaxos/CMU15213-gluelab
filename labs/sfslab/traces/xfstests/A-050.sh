@@ -1,0 +1,117 @@
+#! /bin/bash
+# SPDX-License-Identifier: GPL-2.0
+# Copyright (c) 2009 Christoph Hellwig.
+#
+# FS QA Test No. 050
+#
+# Check out various mount/remount/unmount scenarious on a read-only blockdev.
+#
+seqfull=$0
+. ./common/preamble
+_begin_fstest shutdown mount auto quick
+
+# Override the default cleanup function.
+_cleanup()
+{
+	cd /
+	blockdev --setrw $SCRATCH_DEV
+}
+
+# Import common functions.
+. ./common/filter
+
+# real QA test starts here
+_supported_fs generic
+
+_require_scratch_nocheck
+_require_scratch_shutdown
+_require_local_device $SCRATCH_DEV
+_require_norecovery
+
+# Select appropriate output file
+features=""
+if ! _has_metadata_journaling $SCRATCH_DEV >/dev/null; then
+	features="nojournal"
+elif [ "$FSTYP" = "xfs" ] && echo "$MOUNT_OPTIONS" | grep -q quota ; then
+	# Mounting with quota on XFS requires a writable fs, which means
+	# we expect to fail the ro blockdev test with with EPERM.
+	features="xfsquota"
+fi
+_link_out_file "$features"
+
+_scratch_mkfs >/dev/null 2>&1
+
+#
+# Mark the device read-only
+#
+echo "setting device read-only"
+blockdev --setro $SCRATCH_DEV
+
+#
+# Mount it, and make sure we can't write to it, and we can unmount it again
+#
+echo "mounting read-only block device:"
+_try_scratch_mount 2>&1 | _filter_ro_mount | _filter_scratch
+if [ "${PIPESTATUS[0]}" -eq 0 ]; then
+	echo "touching file on read-only filesystem (should fail)"
+	touch $SCRATCH_MNT/foo 2>&1 | _filter_scratch
+fi
+
+#
+# Apparently this used to be broken at some point:
+#	http://oss.sgi.com/bugzilla/show_bug.cgi?id=807
+#
+echo "unmounting read-only filesystem"
+_scratch_unmount 2>&1 | _filter_scratch | _filter_ending_dot
+
+echo "setting device read-write"
+blockdev --setrw $SCRATCH_DEV
+
+echo "mounting read-write block device:"
+_try_scratch_mount 2>&1 | _filter_scratch
+
+echo "touch files"
+touch $SCRATCH_MNT/{0,1,2,3,4,5,6,7,8,9}{0,1,2,3,4,5,6,7,8,9}
+
+echo "going down:"
+_scratch_shutdown -f
+
+echo "unmounting shutdown filesystem:"
+_scratch_unmount 2>&1 | _filter_scratch
+
+echo "setting device read-only"
+blockdev --setro $SCRATCH_DEV
+
+#
+# Mounting a filesystem that requires log-recovery fails unless
+# -o norecovery is used.
+#
+echo "mounting filesystem that needs recovery on a read-only device:"
+_try_scratch_mount 2>&1 | _filter_ro_mount | _filter_scratch
+
+echo "unmounting read-only filesystem"
+_scratch_unmount 2>&1 | _filter_scratch | _filter_ending_dot
+
+#
+# This is the way out if the underlying device really is read-only.
+# Doesn't mean it's a good idea in practice, more a last resort
+# data recovery hack.
+#
+echo "mounting filesystem with -o norecovery on a read-only device:"
+_try_scratch_mount -o norecovery 2>&1 | _filter_ro_mount | _filter_scratch
+echo "unmounting read-only filesystem"
+_scratch_unmount 2>&1 | _filter_scratch | _filter_ending_dot
+
+echo "setting device read-write"
+blockdev --setrw $SCRATCH_DEV
+
+#
+# But log recovery is performed when mount with -o ro as long as
+# the underlying device is not write protected.
+#
+echo "mounting filesystem that needs recovery with -o ro:"
+_try_scratch_mount -o ro 2>&1 | _filter_scratch
+
+# success, all done
+echo "*** done"
+status=0

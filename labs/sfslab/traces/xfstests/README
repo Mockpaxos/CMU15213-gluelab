@@ -1,0 +1,20 @@
+Tests in this directory were copied from xfstests
+(<https://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git>) and have not
+yet been converted to sfs traces.  Unless otherwise noted they are from
+the tests/generic subdirectory of xfstests.  The actual tests are the
+.sh files (shell scripts); the .out files are the expected successful
+output under some (usually unspecified) conditions.
+
+Some of these tests may not actually be useful for this lab.
+In particular, anything that revolves around a feature of the complete
+Unix file I/O API that _isn't_ already mentioned in sfs-api.h (either as
+an existing feature or as something we might want to add) can be deleted.
+Do think about whether it could be turned into a meaningful test of a
+feature SFS does implement, first, though.
+
+Whenever you convert an .sh file to an sfs trace (one or more .lua files
+in the parent directory) make sure to delete the original .sh file and
+the corresponding .out files so that future lab developers will know
+that one has been converted.
+
+xfstests is licensed GPLv2.0.

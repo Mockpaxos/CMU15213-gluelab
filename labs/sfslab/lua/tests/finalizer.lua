@@ -1,0 +1,85 @@
+--
+-- Test resource cleanup
+--
+-- This feature was ... by discussion on the Lua list about exceptions.
+-- The idea is to always run a certain block at exit, whether due to success
+-- or error. Normally, 'pcall' would be used for such but as Lua already
+-- does that, simply giving a 'cleanup=function' parameter is a logical
+-- thing to do.     -- AKa 22-Jan-2009
+--
+
+lanes.configure()
+
+local FN= "finalizer-test.tmp"
+
+local cleanup
+
+local which= os.time() % 2  -- 0/1
+
+local function lane()
+
+    set_finalizer(cleanup)
+
+    local f,err= io.open(FN,"w")
+    if not f then
+        error( "Could not create "..FN..": "..err )
+    end
+
+    f:write( "Test file that should get removed." )
+
+    io.stdout:write( "File "..FN.." created\n" )
+    -- don't forget to close the file immediately, else we won't be able to delete it until f is collected
+    f:close()
+
+    if which==0 then
+        print "you loose"
+        error("aa")    -- exception here; the value needs NOT be a string
+    end
+
+    -- no exception
+end
+
+-- 
+-- This is called at the end of the lane; whether succesful or not.
+-- Gets the 'error()' parameter as parameter ('nil' if normal return).
+--
+cleanup= function(err)
+
+    -- An error in finalizer will override an error (or success) in the main
+    -- chunk.
+    --
+    --error( "This is important!" )
+
+    if err then
+        io.stdout:write( "Cleanup after error: "..tostring(err).."\n" )
+    else
+        io.stdout:write( "Cleanup after normal return\n" )
+    end
+        
+    local _,err2= os.remove(FN)
+    print( "file removal result: ", tostring( err2))
+    assert(not err2)    -- if this fails, it will be shown in the calling script
+                        -- as an error from the lane itself
+    
+    io.stdout:write( "Removed file "..FN.."\n" )
+end
+
+local lgen = lanes.gen("*", lane)
+
+io.stdout:write "Launching the lane!\n"
+
+local h= lgen()
+
+local _,err,stack= h:join()   -- wait for the lane (no automatic error propagation)
+if err then
+    assert(stack)
+    io.stdout:write( "Lane error: "..tostring(err).."\n" )
+    io.stdout:write( "\t", table.concat(stack,"\t\n"), "\n" )
+end
+
+local f= io.open(FN,"r")
+if f then
+    error( "CLEANUP DID NOT WORK: "..FN.." still exists!" )
+end
+
+io.stdout:write "Finished!\n"
