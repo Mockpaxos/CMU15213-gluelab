@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="HorseshoeOverlook.jpg" alt="Horseshoe Overlook" width="480">
+  <img src="bleach.png" alt="Bleach" width="480">
 </p>
 
 ## CMU 15-213 Glue Lab
