@@ -1,0 +1,70 @@
+#!/usr/bin/env bash
+# Launch a Neovim/Termdebug workspace using the caller's Neovim config.
+set -euo pipefail
+
+# Parse only launcher options before the executable; target arguments are literal.
+assembly=0
+help=0
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -a|--assembly) assembly=1; shift ;;
+        -h|--help) help=1; break ;;
+        --) shift; break ;;
+        *) break ;;
+    esac
+done
+
+if [[ "$help" == 1 ]]; then
+    cat <<'HELP'
+Press Ctrl+Space, release it, then press the letter for the pane you want.
+
+Source mode (default):
+  g  GDB input       p  Program I/O       b  Browse current console
+  s  Source          a  Assembly          v  Variables
+
+Assembly mode (-a or --assembly):
+  g  GDB input       p  Program I/O       b  Browse current console
+  s  Stack           a  Assembly          r  Registers
+
+The display panes use Neovim Normal mode: move and search as usual.
+The two consoles open in input mode: g sends you to the GDB prompt;
+p sends you to the program's terminal. In either console, press
+Ctrl+Space, then b to browse its output in Normal mode. To resume
+typing, press Ctrl+Space, then g or p.
+
+Use :Breakpoints to focus the breakpoints pane in either mode.
+
+Startup: Keep run and start out of .gdbinit; they can execute before
+Termdebug is ready. Put them in a file such as debug.gdb instead,
+then type source debug.gdb at the GDB prompt once the panes appear.
+
+Limitation: ndb has not been tested with GDB's native reverse execution
+(e.g. reverse-step or reverse-continue).
+
+Requires: Neovim 0.12+ with bundled Termdebug, GDB with Python, and python3.
+HELP
+    exit 0
+fi
+
+for dependency in nvim gdb python3; do
+    if ! command -v "$dependency" >/dev/null 2>&1; then
+        printf 'ndb: required command not found: %s\n' "$dependency" >&2
+        exit 127
+    fi
+done
+
+# Resolve symlinks so the launcher also works from PATH.
+launcher=$(readlink -f -- "${BASH_SOURCE[0]}")
+export NDB_INIT="${launcher%/*}/lib/init.lua"
+export NDB_ASSEMBLY="$assembly"
+# Transport argv without interpolating it into shell, Ex, Lua, or GDB commands.
+# The Lua bootstrap consumes and unsets these before starting GDB.
+export NDB_ARGC="$#"
+i=0
+for arg in "$@"; do
+    printf -v "NDB_ARG_$i" '%s' "$arg"
+    export "NDB_ARG_$i"
+    i=$((i + 1))
+done
+
+exec nvim -n -i NONE -c 'lua dofile(vim.env.NDB_INIT)'
