@@ -1,6 +1,6 @@
-![Horseshoe Overlook](HorseshoeOverlook.jpg)
+<img src="HorseshoeOverlook.jpg" alt="Horseshoe Overlook" width="480">
 
-# CMU 15-213 Glue Lab
+## CMU 15-213 Glue Lab
 
 - [`labs/`](labs/) — Eight unofficial labs for CMU’s *Introduction to Computer Systems*.
 - [`ndb/`](ndb/README.md) — A Neovim front end for GDB.
